@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Ashish Salary Tax Calculator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #f1f5f9;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      width: 100%;
+      max-width: 600px;
+    }
+
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #1e293b;
+    }
+
+    label {
+      margin-top: 12px;
+      display: block;
+      color: #334155;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: #f8fafc;
+      margin-top: 5px;
+    }
+
+    button {
+      margin-top: 20px;
+      width: 100%;
+      padding: 12px;
+      background: #0ea5e9;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #0284c7;
+    }
+
+    .result {
+      background: #f0fdf4;
+      border-left: 5px solid #22c55e;
+      padding: 16px;
+      margin-top: 20px;
+      border-radius: 8px;
+      color: #065f46;
+      line-height: 1.6;
+    }
+
+    canvas {
+      margin-top: 30px;
+    }
+
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    footer span {
+      font-weight: bold;
+      color: #1e40af;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container" id="taxSection">
+  <h2>🧾 Ashish Salary Tax Calculator</h2>
+
+  <label>Monthly Salary (NPR)</label>
+  <input type="number" id="salary" placeholder="e.g. 80000">
+
+  <label>No. of Months</label>
+  <input type="number" id="months" value="12">
+
+  <label>Bonus (Annual NPR)</label>
+  <input type="number" id="bonus" value="0">
+
+  <label>Married Status</label>
+  <select id="married">
+    <option value="unmarried">Unmarried</option>
+    <option value="married">Married</option>
+  </select>
+
+  <label>Insurance Premium (Annual NPR)</label>
+  <input type="number" id="insurance" value="0">
+
+  <button onclick="calculateTax()">Calculate Tax</button>
+  <button onclick="downloadPDF()">📄 Download PDF</button>
+
+  <div class="result" id="output"></div>
+
+  <canvas id="taxChart" width="400" height="300"></canvas>
+</div>
+
+<footer>© <span>Ashish Shrestha</span> | Made with 🧠, ☕ and a little bit of tax frustration</footer>
+
+<script>
+  let chart;
+
+  function calculateTax() {
+    let salary = parseFloat(document.getElementById("salary").value);
+    let months = parseFloat(document.getElementById("months").value);
+    let bonus = parseFloat(document.getElementById("bonus").value);
+    let married = document.getElementById("married").value;
+    let insurance = parseFloat(document.getElementById("insurance").value);
+
+    let annualSalary = salary * months;
+    let annualIncome = annualSalary + bonus;
+    let cit = salary * 0.07 * months;
+    let deductions = cit + insurance;
+    let taxable = annualIncome - deductions;
+
+    let slab1 = married === 'married' ? 600000 : 500000;
+    let slab2 = slab1 + 200000;
+    let slab3 = 2000000;
+    let tax = 0;
+
+    if (taxable <= slab1) {
+      tax = taxable * 0.01;
+    } else if (taxable <= slab2) {
+      tax = (slab1 * 0.01) + ((taxable - slab1) * 0.1);
+    } else if (taxable <= slab3) {
+      tax = (slab1 * 0.01) + (200000 * 0.1) + ((taxable - slab2) * 0.2);
+    } else {
+      tax = (slab1 * 0.01) + (200000 * 0.1) + (slab3 - slab2) * 0.2 + ((taxable - slab3) * 0.3);
+    }
+
+    let monthlyTax = tax / months;
+    let monthlyCIT = salary * 0.07;
+    let monthlyReceive = salary - monthlyTax - monthlyCIT;
+
+    // Output Section
+    document.getElementById("output").innerHTML = `
+      <strong>Total Income:</strong> NPR ${annualIncome.toFixed(2)}<br>
+      <strong>Deductions (CIT + Insurance):</strong> NPR ${deductions.toFixed(2)}<br>
+      <strong>Taxable Income:</strong> NPR ${taxable.toFixed(2)}<br><br>
+      <strong>Annual Tax:</strong> NPR ${tax.toFixed(2)}<br>
+      <strong>Monthly Tax:</strong> NPR ${monthlyTax.toFixed(2)}<br>
+      <strong>Monthly CIT:</strong> NPR ${monthlyCIT.toFixed(2)}<br>
+      <strong>Take Home (Monthly):</strong> NPR ${monthlyReceive.toFixed(2)}
+    `;
+
+    drawChart(monthlyTax, monthlyCIT, monthlyReceive);
+  }
+
+  function drawChart(tax, cit, receive) {
+    const ctx = document.getElementById("taxChart").getContext("2d");
+    if (chart) chart.destroy(); // Clear old chart
+
+    chart = new Chart(ctx, {
+      type: "pie",
+      data: {
+        labels: ["Monthly Tax", "Monthly CIT", "Monthly Take-Home"],
+        datasets: [{
+          label: "Monthly Salary Breakdown",
+          data: [tax, cit, receive],
+          backgroundColor: ["#f87171", "#facc15", "#4ade80"],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: "bottom"
+          }
+        }
+      }
+    });
+  }
+
+  function downloadPDF() {
+    const element = document.getElementById("taxSection");
+    const options = {
+      margin: 0.5,
+      filename: 'ashish-tax-report.pdf',
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    };
+    html2pdf().from(element).set(options).save();
+  }
+</script>
+
+</body>
+</html>
